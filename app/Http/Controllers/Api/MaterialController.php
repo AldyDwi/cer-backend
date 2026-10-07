@@ -142,4 +142,23 @@ class MaterialController extends Controller
             'message' => 'Materi berhasil dihapus.',
         ]);
     }
+
+    /**
+     * Menampilkan opsi materi milik guru yang sedang login.
+     */
+    public function options(Request $request)
+    {
+        $materials = Material::query()
+            ->where('teacher_id', $request->user()->id)
+            ->select([
+                'id',
+                'title',
+            ])
+            ->latest('created_at')
+            ->get();
+
+        return response()->json([
+            'data' => $materials,
+        ]);
+    }
 }

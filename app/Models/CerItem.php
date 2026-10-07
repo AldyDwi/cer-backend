@@ -37,6 +37,36 @@ class CerItem extends Model
         return $this->hasMany(OptionCard::class, 'item_id');
     }
 
+    public function claimCard()
+    {
+        return $this->hasOne(OptionCard::class, 'item_id')
+            ->where('card_type', 'claim');
+    }
+
+    public function evidenceCard()
+    {
+        return $this->hasOne(OptionCard::class, 'item_id')
+            ->where('card_type', 'evidence');
+    }
+
+    public function reasoningCard()
+    {
+        return $this->hasOne(OptionCard::class, 'item_id')
+            ->where('card_type', 'reasoning');
+    }
+
+    public function distractorEvidenceCard()
+    {
+        return $this->hasOne(OptionCard::class, 'item_id')
+            ->where('card_type', 'distractor_evidence');
+    }
+
+    public function distractorReasoningCard()
+    {
+        return $this->hasOne(OptionCard::class, 'item_id')
+            ->where('card_type', 'distractor_reasoning');
+    }
+
     public function studentAnswers()
     {
         return $this->hasMany(StudentAnswer::class, 'item_id');
