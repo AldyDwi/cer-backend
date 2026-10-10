@@ -17,14 +17,17 @@ class QuizAttempt extends Model
         'score',
         'duration_seconds',
         'status',
+        'started_at',
         'completed_at',
+        'deadline_at',
     ];
 
     protected function casts(): array
     {
         return [
             'score' => 'decimal:2',
-            'duration_seconds' => 'integer',
+            'started_at' => 'datetime',
+            'deadline_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }

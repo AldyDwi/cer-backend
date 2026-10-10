@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\CerQuizController;
 use App\Http\Controllers\Api\CerItemController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\StudentCerAttemptController;
 
 
 /*
@@ -166,5 +167,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get(
         '/student/cer-quizzes',
         [CerQuizController::class, 'publishedForStudent']
+    );
+
+    Route::get(
+        '/student/cer-quizzes/{cerQuiz}/attempt',
+        [StudentCerAttemptController::class, 'start']
+    );
+
+    Route::put(
+        '/student/cer-quizzes/{cerQuiz}/attempt/answers',
+        [StudentCerAttemptController::class, 'saveAnswers']
+    );
+
+    Route::post(
+        '/student/cer-quizzes/{cerQuiz}/attempt/submit',
+        [StudentCerAttemptController::class, 'submit']
+    );
+
+    Route::get(
+        '/student/cer-quizzes/{cerQuiz}/review',
+        [StudentCerAttemptController::class, 'review']
     );
 });
