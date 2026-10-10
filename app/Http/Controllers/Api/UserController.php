@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -24,27 +26,21 @@ class UserController extends Controller
                 'required',
                 'string',
                 'max:100',
-                'unique:users,username,' . $user->id,
+                Rule::unique('users', 'username')->ignore($user->id),
             ],
 
             'email' => [
                 'required',
                 'email',
                 'max:255',
-                'unique:users,email,' . $user->id,
+                Rule::unique('users', 'email')->ignore($user->id),
             ],
 
             'class_name' => [
+                'sometimes',
                 'nullable',
                 'string',
                 'max:100',
-            ],
-
-            'password' => [
-                'nullable',
-                'string',
-                'confirmed',
-                Password::min(8),
             ],
         ]);
 
@@ -52,24 +48,14 @@ class UserController extends Controller
         $user->username = $validated['username'];
         $user->email = $validated['email'];
 
-        /*
-         * class_name hanya digunakan mahasiswa.
-         * Teacher tetap NULL.
-         */
+        // Kelas hanya berlaku untuk mahasiswa.
         if ($user->role === 'student') {
-            $user->class_name =
-                $validated['class_name'] ?? null;
+            // Pertahankan kelas lama jika class_name tidak dikirim.
+            if (array_key_exists('class_name', $validated)) {
+                $user->class_name = $validated['class_name'];
+            }
         } else {
             $user->class_name = null;
-        }
-
-        /*
-         * Password hanya diubah jika user mengisinya.
-         */
-        if (!empty($validated['password'])) {
-            $user->password = Hash::make(
-                $validated['password']
-            );
         }
 
         $user->save();
@@ -77,6 +63,41 @@ class UserController extends Controller
         return response()->json([
             'message' => 'Profil berhasil diperbarui.',
             'user' => $user->fresh(),
+        ]);
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'current_password' => [
+                'required',
+                'current_password',
+            ],
+
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                Password::min(8),
+            ],
+        ]);
+
+        // Jangan izinkan password baru sama dengan password lama.
+        if (Hash::check($validated['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => [
+                    'Password baru harus berbeda dari password saat ini.',
+                ],
+            ]);
+        }
+
+        $user->password = Hash::make($validated['password']);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Password berhasil diperbarui.',
         ]);
     }
 }

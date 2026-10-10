@@ -35,7 +35,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
-    Route::patch('/profile', [UserController::class, 'updateProfile']);
+    
+    Route::patch(
+        '/profile',
+        [UserController::class, 'updateProfile']
+    );
+
+    Route::patch(
+        '/profile/password',
+        [UserController::class, 'updatePassword']
+    );
 
 
     /*
@@ -145,5 +154,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get(
         '/cer-quizzes/{cerQuiz}/grades',
         [CerQuizController::class, 'grades']
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Student Activities
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        '/student/cer-quizzes',
+        [CerQuizController::class, 'publishedForStudent']
     );
 });

@@ -272,4 +272,67 @@ class CerQuizController extends Controller
             'data' => $data,
         ]);
     }
+
+    public function publishedForStudent(Request $request)
+    {
+        $student = $request->user();
+
+        abort_unless(
+            $student->role === 'student',
+            403,
+            'Akses hanya untuk mahasiswa.'
+        );
+
+        $activities = CerQuiz::query()
+            ->with([
+                'teacher:id,name',
+                'material:id,title',
+            ])
+            ->where('status', 'published')
+            ->latest()
+            ->get();
+
+        $quizIds = $activities->pluck('id');
+
+        // Ambil pengerjaan terakhir yang sudah selesai
+        // untuk mahasiswa yang sedang login.
+        $attempts = QuizAttempt::query()
+            ->where('student_id', $student->id)
+            ->whereIn('quiz_id', $quizIds)
+            ->where('status', 'completed')
+            ->latest('completed_at')
+            ->get()
+            ->unique('quiz_id')
+            ->keyBy('quiz_id');
+
+        $data = $activities->map(function ($activity) use ($attempts) {
+            $attempt = $attempts->get($activity->id);
+
+            return [
+                'id' => $activity->id,
+                'title' => $activity->title,
+                'description' => $activity->description,
+                'duration_minutes' => $activity->duration_minutes,
+                'status' => $activity->status,
+
+                'teacher' => [
+                    'id' => $activity->teacher?->id,
+                    'name' => $activity->teacher?->name ?? 'Dosen',
+                ],
+
+                'material' => [
+                    'id' => $activity->material?->id,
+                    'title' => $activity->material?->title ?? '-',
+                ],
+
+                'completed' => $attempt !== null,
+                'score' => $attempt?->score,
+                'completed_at' => $attempt?->completed_at,
+            ];
+        })->values();
+
+        return response()->json([
+            'data' => $data,
+        ]);
+    }
 }
