@@ -94,6 +94,11 @@ Route::middleware('auth:sanctum')->group(function () {
         'destroy',
     ]);
 
+    Route::put(
+        '/cer-quizzes/{id}', 
+        [CerQuizController::class, 'update']
+    );
+
 
     /*
     |--------------------------------------------------------------------------

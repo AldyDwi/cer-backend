@@ -57,6 +57,11 @@ class CerQuizController extends Controller
                 'min:1',
                 'max:180',
             ],
+
+            'show_keys' => [
+                'nullable',
+                'boolean',
+            ],
         ], [
             'title.required' => 'Judul aktivitas wajib diisi.',
             'description.required' => 'Deskripsi aktivitas wajib diisi.',
@@ -89,6 +94,7 @@ class CerQuizController extends Controller
             'description' => $validated['description'],
             'duration_minutes' => $validated['duration_minutes'],
             'status' => 'draft',
+            'show_keys' => $validated['show_keys'] ?? true,
         ]);
 
         // Broadcast Event Reverb: Aktivitas Baru Dibuat
@@ -122,7 +128,7 @@ class CerQuizController extends Controller
     }
 
     /**
-     * Update aktivitas CER.
+     * Update aktivitas CER (termasuk toggle show_keys).
      */
     public function update(Request $request, string $id)
     {
@@ -138,50 +144,79 @@ class CerQuizController extends Controller
 
         $validated = $request->validate([
             'title' => [
+                'sometimes',
                 'required',
                 'string',
                 'max:255',
             ],
 
             'description' => [
+                'sometimes',
                 'required',
                 'string',
             ],
 
             'material_id' => [
+                'sometimes',
                 'required',
                 'integer',
                 'exists:materials,id',
             ],
 
             'duration_minutes' => [
+                'sometimes',
                 'required',
                 'integer',
                 'min:1',
                 'max:180',
             ],
+
+            'show_keys' => [
+                'sometimes',
+                'boolean',
+            ],
+            'show_correct_answers' => [
+                'sometimes',
+                'boolean',
+            ],
         ]);
 
-        $material = Material::query()
-            ->where('id', $validated['material_id'])
-            ->where('teacher_id', $request->user()->id)
-            ->first();
+        $updateData = [];
 
-        if (!$material) {
-            return response()->json([
-                'message' => 'Materi tidak dapat digunakan.',
-            ], 403);
+        if (array_key_exists('title', $validated)) {
+            $updateData['title'] = $validated['title'];
+        }
+        if (array_key_exists('description', $validated)) {
+            $updateData['description'] = $validated['description'];
+        }
+        if (array_key_exists('duration_minutes', $validated)) {
+            $updateData['duration_minutes'] = $validated['duration_minutes'];
+        }
+        if (array_key_exists('show_keys', $validated)) {
+            $updateData['show_keys'] = $validated['show_keys'];
+        } elseif (array_key_exists('show_correct_answers', $validated)) {
+            $updateData['show_keys'] = $validated['show_correct_answers'];
         }
 
-        $quiz->update([
-            'title' => $validated['title'],
-            'description' => $validated['description'],
-            'material_id' => $material->id,
-            'duration_minutes' => $validated['duration_minutes'],
-        ]);
+        if (array_key_exists('material_id', $validated)) {
+            $material = Material::query()
+                ->where('id', $validated['material_id'])
+                ->where('teacher_id', $request->user()->id)
+                ->first();
+
+            if (!$material) {
+                return response()->json([
+                    'message' => 'Materi tidak dapat digunakan.',
+                ], 403);
+            }
+
+            $updateData['material_id'] = $material->id;
+        }
+
+        $quiz->update($updateData);
 
         // Broadcast Event Reverb: Judul / Data Aktivitas Diperbarui
-        CerActivityUpdated::dispatch($quiz, 'updated');
+        CerActivityUpdated::dispatch($quiz->fresh(), 'updated');
 
         return response()->json([
             'message' => 'Aktivitas CER berhasil diperbarui.',
@@ -237,7 +272,7 @@ class CerQuizController extends Controller
             'status' => $validated['status'],
         ]);
 
-        // Broadcast Event Reverb: Status Berubah (Draft -> Published atau sebaliknya)
+        // Broadcast Event Reverb: Status Berubah
         CerActivityUpdated::dispatch($cerQuiz->fresh(), 'status_changed');
 
         return response()->json([
@@ -246,6 +281,9 @@ class CerQuizController extends Controller
         ]);
     }
 
+    /**
+     * Menampilkan daftar nilai mahasiswa untuk aktivitas CER.
+     */
     public function grades(CerQuiz $cerQuiz)
     {
         $attempts = QuizAttempt::query()
@@ -257,7 +295,7 @@ class CerQuizController extends Controller
             ->with('student:id,name,username,email,class_name')
             ->latest('completed_at')
             ->get()
-            ->unique('student_id'); // Memastikan hanya attempt terbaru per mahasiswa yang diambil
+            ->unique('student_id');
 
         $data = $attempts->map(function ($attempt) {
             return [
@@ -271,16 +309,19 @@ class CerQuizController extends Controller
                 'duration_formatted' => $attempt->duration_seconds 
                     ? gmdate('H:i:s', $attempt->duration_seconds) 
                     : null,
-                'status' => $attempt->status, // 'completed'
+                'status' => $attempt->status,
                 'completed_at' => $attempt->completed_at,
             ];
-        })->values(); // Reset array index setelah unique()
+        })->values();
 
         return response()->json([
             'data' => $data,
         ]);
     }
 
+    /**
+     * Menampilkan aktivitas CER yang sudah dipublikasikan untuk mahasiswa.
+     */
     public function publishedForStudent(Request $request)
     {
         $student = $request->user();
@@ -302,8 +343,6 @@ class CerQuizController extends Controller
 
         $quizIds = $activities->pluck('id');
 
-        // Ambil pengerjaan terakhir yang sudah selesai
-        // untuk mahasiswa yang sedang login.
         $attempts = QuizAttempt::query()
             ->where('student_id', $student->id)
             ->whereIn('quiz_id', $quizIds)
@@ -322,6 +361,7 @@ class CerQuizController extends Controller
                 'description' => $activity->description,
                 'duration_minutes' => $activity->duration_minutes,
                 'status' => $activity->status,
+                'show_keys' => $activity->show_keys ?? true, // Kembalikan properti show_keys
 
                 'teacher' => [
                     'id' => $activity->teacher?->id,

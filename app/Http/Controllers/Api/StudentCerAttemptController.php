@@ -355,6 +355,7 @@ class StudentCerAttemptController extends Controller
             'quiz' => [
                 'id' => $quiz->id,
                 'title' => $quiz->title,
+                'show_keys' => (bool) $quiz->show_keys,
                 'material' => $quiz->material,
             ],
             'attempt' => [

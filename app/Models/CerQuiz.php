@@ -17,11 +17,13 @@ class CerQuiz extends Model
         'description',
         'duration_minutes',
         'status',
+        'show_keys',
     ];
 
     protected function casts(): array
     {
         return [
+            'show_keys' => 'boolean',
             'duration_minutes' => 'integer',
         ];
     }
