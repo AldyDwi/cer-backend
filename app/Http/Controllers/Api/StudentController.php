@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\CerActivityUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -144,6 +145,9 @@ class StudentController extends Controller
             'class_name' => $validated['class_name'],
         ]);
 
+        // Broadcast Reverb untuk pembaruan data student
+        CerActivityUpdated::dispatch(null, 'student_created');
+
         return response()->json([
             'message' => 'Student berhasil ditambahkan.',
             'data' => [
@@ -204,7 +208,7 @@ class StudentController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('users', 'username')
+                'Rule::unique("users", "username")' => Rule::unique('users', 'username')
                     ->ignore($student->id),
             ],
 
@@ -212,7 +216,7 @@ class StudentController extends Controller
                 'required',
                 'email',
                 'max:255',
-                Rule::unique('users', 'email')
+                'Rule::unique("users", "email")' => Rule::unique('users', 'email')
                     ->ignore($student->id),
             ],
 
@@ -263,6 +267,9 @@ class StudentController extends Controller
 
         $student->save();
 
+        // Broadcast Reverb untuk pembaruan data student
+        CerActivityUpdated::dispatch(null, 'student_updated');
+
         return response()->json([
             'message' => 'Student berhasil diperbarui.',
             'data' => [
@@ -291,6 +298,9 @@ class StudentController extends Controller
         }
 
         $student->delete();
+
+        // Broadcast Reverb untuk pembaruan data student
+        CerActivityUpdated::dispatch(null, 'student_deleted');
 
         return response()->json([
             'message' => 'Student berhasil dihapus.',

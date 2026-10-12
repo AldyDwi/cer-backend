@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\CerActivityUpdated;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -59,6 +60,9 @@ class UserController extends Controller
         }
 
         $user->save();
+
+        // Broadcast Reverb untuk pembaruan profil pengguna
+        CerActivityUpdated::dispatch(null, 'profile_updated');
 
         return response()->json([
             'message' => 'Profil berhasil diperbarui.',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\CerActivityUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Material;
 use Illuminate\Http\Request;
@@ -60,6 +61,9 @@ class MaterialController extends Controller
             'content' => $validated['content'],
         ]);
 
+        // Broadcast Reverb untuk pembaruan materi
+        CerActivityUpdated::dispatch(null, 'material_created');
+
         return response()->json([
             'message' => 'Materi berhasil ditambahkan.',
             'data' => $material,
@@ -115,6 +119,9 @@ class MaterialController extends Controller
             'content' => $validated['content'],
         ]);
 
+        // Broadcast Reverb untuk pembaruan materi
+        CerActivityUpdated::dispatch(null, 'material_updated');
+
         return response()->json([
             'message' => 'Materi berhasil diperbarui.',
             'data' => $material->fresh(),
@@ -137,6 +144,9 @@ class MaterialController extends Controller
         }
 
         $material->delete();
+
+        // Broadcast Reverb untuk pembaruan materi
+        CerActivityUpdated::dispatch(null, 'material_deleted');
 
         return response()->json([
             'message' => 'Materi berhasil dihapus.',

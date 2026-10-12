@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\CerActivityUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\CerQuiz;
 use App\Models\Material;
@@ -90,6 +91,9 @@ class CerQuizController extends Controller
             'status' => 'draft',
         ]);
 
+        // Broadcast Event Reverb: Aktivitas Baru Dibuat
+        CerActivityUpdated::dispatch($quiz, 'created');
+
         return response()->json([
             'message' => 'Aktivitas CER berhasil dibuat.',
             'data' => $quiz->load('material:id,title'),
@@ -176,6 +180,9 @@ class CerQuizController extends Controller
             'duration_minutes' => $validated['duration_minutes'],
         ]);
 
+        // Broadcast Event Reverb: Judul / Data Aktivitas Diperbarui
+        CerActivityUpdated::dispatch($quiz, 'updated');
+
         return response()->json([
             'message' => 'Aktivitas CER berhasil diperbarui.',
             'data' => $quiz->load('material:id,title'),
@@ -197,7 +204,11 @@ class CerQuizController extends Controller
             ], 404);
         }
 
+        $deletedQuiz = clone $quiz;
         $quiz->delete();
+
+        // Broadcast Event Reverb: Aktivitas Dihapus
+        CerActivityUpdated::dispatch($deletedQuiz, 'deleted');
 
         return response()->json([
             'message' => 'Aktivitas CER berhasil dihapus.',
@@ -205,7 +216,7 @@ class CerQuizController extends Controller
     }
 
     /**
-     * Mengubah status aktivitas CER.
+     * Mengubah status aktivitas CER (Draft / Published).
      */
     public function updateStatus(
         Request $request,
@@ -226,6 +237,9 @@ class CerQuizController extends Controller
             'status' => $validated['status'],
         ]);
 
+        // Broadcast Event Reverb: Status Berubah (Draft -> Published atau sebaliknya)
+        CerActivityUpdated::dispatch($cerQuiz->fresh(), 'status_changed');
+
         return response()->json([
             'message' => 'Status aktivitas berhasil diperbarui.',
             'data' => $cerQuiz->fresh(),
@@ -237,36 +251,30 @@ class CerQuizController extends Controller
         $attempts = QuizAttempt::query()
             ->where('quiz_id', $cerQuiz->id)
             ->where('status', 'completed')
+            ->whereHas('student', function ($query) {
+                $query->where('role', 'student');
+            })
             ->with('student:id,name,username,email,class_name')
             ->latest('completed_at')
-            ->get();
+            ->get()
+            ->unique('student_id'); // Memastikan hanya attempt terbaru per mahasiswa yang diambil
 
         $data = $attempts->map(function ($attempt) {
             return [
-                'id' => $attempt->id,
-
+                'id' => $attempt->student_id,
                 'student_id' => $attempt->student_id,
-
-                'name' => $attempt->student->name,
-
-                'username' => $attempt->student->username,
-
-                'class_name' => $attempt->student->class_name,
-
+                'name' => $attempt->student?->name ?? 'Mahasiswa',
+                'username' => $attempt->student?->username ?? '-',
+                'class_name' => $attempt->student?->class_name ?? '-',
                 'score' => $attempt->score,
-
                 'duration_seconds' => $attempt->duration_seconds,
-
-                'duration_formatted' => gmdate(
-                    'H:i:s',
-                    $attempt->duration_seconds
-                ),
-
-                'status' => $attempt->status,
-
+                'duration_formatted' => $attempt->duration_seconds 
+                    ? gmdate('H:i:s', $attempt->duration_seconds) 
+                    : null,
+                'status' => $attempt->status, // 'completed'
                 'completed_at' => $attempt->completed_at,
             ];
-        });
+        })->values(); // Reset array index setelah unique()
 
         return response()->json([
             'data' => $data,

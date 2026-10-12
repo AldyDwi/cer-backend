@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\CerActivityUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CerItem\StoreCerItemRequest;
 use App\Http\Requests\CerItem\UpdateCerItemRequest;
@@ -49,6 +50,9 @@ class CerItemController extends Controller
             $request->validated()
         );
 
+        // Broadcast Reverb saat triplet baru ditambahkan
+        CerActivityUpdated::dispatch($cerQuiz, 'item_created');
+
         return response()->json([
             'message' => 'Triplet CER berhasil ditambahkan.',
             'data' => $item,
@@ -67,6 +71,9 @@ class CerItemController extends Controller
             $request->validated()
         );
 
+        // Broadcast Reverb saat triplet diperbarui
+        CerActivityUpdated::dispatch($cerItem->quiz, 'item_updated');
+
         return response()->json([
             'message' => 'Triplet CER berhasil diperbarui.',
             'data' => $item,
@@ -80,7 +87,12 @@ class CerItemController extends Controller
         $this->authorizeTeacher($cerItem->quiz);
         $this->ensureDraft($cerItem->quiz);
 
+        $quiz = $cerItem->quiz;
+
         $this->cerItemService->delete($cerItem);
+
+        // Broadcast Reverb saat triplet dihapus
+        CerActivityUpdated::dispatch($quiz, 'item_deleted');
 
         return response()->json([
             'message' => 'Triplet CER berhasil dihapus.',

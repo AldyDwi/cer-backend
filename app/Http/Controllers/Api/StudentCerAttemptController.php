@@ -251,7 +251,6 @@ class StudentCerAttemptController extends Controller
                 abort(404, 'Attempt tidak ditemukan.');
             }
 
-            // Idempotent: submit ulang tidak menghitung ulang nilai.
             if ($attempt->status === 'completed') {
                 return $attempt;
             }
@@ -260,7 +259,6 @@ class StudentCerAttemptController extends Controller
                 return $this->finalizeExpired($attempt, $quiz);
             }
 
-            // Payload hanya divalidasi dan disimpan jika belum deadline.
             $validated = $this->validateAnswers($request, $quiz);
 
             $this->persistAnswers(
@@ -276,6 +274,9 @@ class StudentCerAttemptController extends Controller
                 $this->now()
             );
         }, 3);
+
+        // Broadcast Reverb saat pengerjaan berhasil disubmit
+        \App\Events\QuizAttemptSubmitted::dispatch($result);
 
         return response()->json([
             'message' => 'Aktivitas berhasil difinalisasi.',
