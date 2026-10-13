@@ -296,14 +296,38 @@ class StudentCerAttemptController extends Controller
      */
     public function review(Request $request, CerQuiz $cerQuiz)
     {
+        $user = $request->user();
+
+        // 1. Validasi Role
         abort_unless(
-            $request->user()->role === 'student',
-            403
+            in_array($user->role, ['student', 'teacher']),
+            403,
+            'Anda tidak memiliki akses untuk melihat review pengerjaan ini.'
         );
 
+        // 2. Tentukan ID Mahasiswa yang akan dilihat kuisnya
+        $studentId = $user->id;
+
+        if ($user->role === 'teacher') {
+            // Jika dosen, wajib menyertakan query parameter student_id
+            $request->validate([
+                'student_id' => ['required', 'integer', 'exists:users,id'],
+            ]);
+
+            // Pastikan dosen memang pemilik kuis ini
+            abort_unless(
+                $cerQuiz->teacher_id === $user->id,
+                403,
+                'Anda tidak memiliki akses ke kuis ini.'
+            );
+
+            $studentId = (int) $request->query('student_id');
+        }
+
+        // 3. Ambil pengerjaan (attempt) mahasiswa terkait
         $attempt = QuizAttempt::query()
             ->where('quiz_id', $cerQuiz->id)
-            ->where('student_id', $request->user()->id)
+            ->where('student_id', $studentId)
             ->where('status', 'completed')
             ->latest('id')
             ->firstOrFail();
@@ -355,7 +379,8 @@ class StudentCerAttemptController extends Controller
             'quiz' => [
                 'id' => $quiz->id,
                 'title' => $quiz->title,
-                'show_keys' => (bool) $quiz->show_keys,
+                // Jika diakses oleh dosen, kunci jawaban selalu ditampilkan
+                'show_keys' => $user->role === 'teacher' ? true : (bool) $quiz->show_keys,
                 'material' => $quiz->material,
             ],
             'attempt' => [
