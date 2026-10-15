@@ -17,10 +17,10 @@ class MaterialController extends Controller
     {
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
-            'per_page' => ['nullable', 'integer', 'in:10,20,50'],
+            'per_page' => ['nullable', 'integer', 'in:10,20,50,100,500,1000'],
         ]);
 
-        $perPage = $validated['per_page'] ?? 10;
+        $perPage = $validated['per_page'] ?? 1000;
 
         $query = Material::query()
             ->where('teacher_id', $request->user()->id);

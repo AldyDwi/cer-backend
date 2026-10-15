@@ -123,39 +123,29 @@ class CerItemController extends Controller
         $this->authorizeTeacher($cerQuiz);
 
         $validated = $request->validate([
-            'claim' => [
-                'required',
-                'string',
-                'min:1',
-            ],
-
-            'evidence' => [
-                'required',
-                'string',
-                'min:1',
-            ],
-
-            'reasoning' => [
-                'required',
-                'string',
-                'min:1',
-            ],
+            'claim' => ['required', 'string', 'min:1'],
+            'evidence' => ['required', 'string', 'min:1'],
+            'reasoning' => ['required', 'string', 'min:1'],
         ], [
-            'claim.required' =>
-                'Claim wajib diisi terlebih dahulu.',
-
-            'evidence.required' =>
-                'Evidence wajib diisi terlebih dahulu.',
-
-            'reasoning.required' =>
-                'Reasoning wajib diisi terlebih dahulu.',
+            'claim.required' => 'Claim wajib diisi terlebih dahulu.',
+            'evidence.required' => 'Evidence wajib diisi terlebih dahulu.',
+            'reasoning.required' => 'Reasoning wajib diisi terlebih dahulu.',
         ]);
 
         $cerQuiz->load('material');
 
+        if (!$cerQuiz->material || !$cerQuiz->material->content) {
+            return response()->json([
+                'message' => 'Materi pembelajaran tidak ditemukan atau konten materi masih kosong.',
+            ], 422);
+        }
+
         $geminiService = app(GeminiService::class);
 
         try {
+            // Set max execution time agar PHP tidak timeout duluan
+            set_time_limit(120);
+
             $result = $geminiService->generateDistractors(
                 $cerQuiz->material->content,
                 $validated['claim'],
@@ -164,17 +154,14 @@ class CerItemController extends Controller
             );
 
             return response()->json([
-                'message' =>
-                    'Distractor berhasil dibuat.',
-
+                'message' => 'Distractor berhasil dibuat.',
                 'data' => $result,
             ]);
         } catch (\Throwable $e) {
             report($e);
 
             return response()->json([
-                'message' =>
-                    'Gagal membuat distractor. Silakan coba lagi.',
+                'message' => 'Gagal membuat distractor dari AI. ' . $e->getMessage(),
             ], 500);
         }
     }

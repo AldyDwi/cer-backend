@@ -19,10 +19,10 @@ class StudentController extends Controller
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'class_name' => ['nullable', 'string', 'max:100'],
-            'per_page' => ['nullable', 'integer', 'in:10,20,50'],
+            'per_page' => ['nullable', 'integer', 'in:10,20,50,100,500,1000'],
         ]);
 
-        $perPage = $validated['per_page'] ?? 10;
+        $perPage = $validated['per_page'] ?? 1000;
 
         $query = User::query()
             ->where('role', 'student');
@@ -208,16 +208,14 @@ class StudentController extends Controller
                 'required',
                 'string',
                 'max:255',
-                'Rule::unique("users", "username")' => Rule::unique('users', 'username')
-                    ->ignore($student->id),
+                Rule::unique('users', 'username')->ignore($student->id),
             ],
 
             'email' => [
                 'required',
                 'email',
                 'max:255',
-                'Rule::unique("users", "email")' => Rule::unique('users', 'email')
-                    ->ignore($student->id),
+                Rule::unique('users', 'email')->ignore($student->id),
             ],
 
             /*
