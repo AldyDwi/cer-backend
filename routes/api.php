@@ -153,13 +153,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | CER Grades
+    | CER Grades and Activity Logs
     |--------------------------------------------------------------------------
     */
 
     Route::get(
         '/cer-quizzes/{cerQuiz}/grades',
         [CerQuizController::class, 'grades']
+    );
+
+    Route::get(
+        '/cer-quizzes/{cerQuiz}/logs', 
+        [CerQuizController::class, 'getActivityLogs']
     );
 
 

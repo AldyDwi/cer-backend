@@ -6,13 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\CerQuiz;
 use App\Models\QuizAttempt;
 use App\Models\StudentAnswer;
+use App\Models\StudentActivityLog;
 use App\Services\CerAttemptFinalizer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class StudentCerAttemptController extends Controller
 {
@@ -22,7 +22,6 @@ class StudentCerAttemptController extends Controller
 
     /**
      * Memulai atau melanjutkan aktivitas CER.
-     * Jika attempt sudah selesai, jangan membuat attempt baru.
      */
     public function start(Request $request, CerQuiz $cerQuiz)
     {
@@ -52,12 +51,10 @@ class StudentCerAttemptController extends Controller
             $now = $this->now();
 
             if ($attempt && $attempt->status === 'in_progress') {
-                // Perbaiki attempt lama yang belum memiliki waktu mulai.
                 if (! $attempt->started_at) {
                     $attempt->started_at = $now;
                 }
 
-                // Isi deadline hanya jika belum tersedia.
                 if (! $attempt->deadline_at) {
                     $startedAt = Carbon::parse(
                         $attempt->started_at,
@@ -71,7 +68,6 @@ class StudentCerAttemptController extends Controller
 
                 $attempt->save();
 
-                // Periksa deadline setelah memastikan nilainya tersedia.
                 if (
                     $attempt->deadline_at &&
                     $now->greaterThanOrEqualTo(
@@ -129,7 +125,7 @@ class StudentCerAttemptController extends Controller
     }
 
     /**
-     * Autosave sekumpulan jawaban.
+     * Autosave sekumpulan jawaban beserta log aktivitas.
      */
     public function saveAnswers(
         Request $request,
@@ -156,7 +152,6 @@ class StudentCerAttemptController extends Controller
 
             abort_unless($attempt, 404, 'Attempt tidak ditemukan.');
 
-            // Request ulang tidak boleh mengubah attempt yang selesai.
             if ($attempt->status === 'completed') {
                 return [
                     'kind' => 'completed',
@@ -180,23 +175,23 @@ class StudentCerAttemptController extends Controller
                 $validated['answers']
             );
 
+            // Simpan atau update log aktivitas saat autosave
+            $logsData = $request->input('logs', []);
+            if (! empty($logsData)) {
+                $this->persistLogs($attempt, $request->user()->id, $quiz->id, $logsData);
+            }
+
             return [
                 'kind' => 'saved',
                 'attempt' => $attempt,
             ];
         }, 3);
 
-        if ($result['kind'] === 'expired') {
+        if ($result['kind'] === 'expired' || $result['kind'] === 'completed') {
             return response()->json([
-                'message' => 'Waktu pengerjaan telah habis.',
-                'status' => 'completed',
-                'attempt' => $result['attempt'],
-            ], 409);
-        }
-
-        if ($result['kind'] === 'completed') {
-            return response()->json([
-                'message' => 'Attempt telah selesai dan tidak dapat diubah.',
+                'message' => $result['kind'] === 'expired' 
+                    ? 'Waktu pengerjaan telah habis.' 
+                    : 'Attempt telah selesai dan tidak dapat diubah.',
                 'status' => 'completed',
                 'attempt' => $result['attempt'],
             ], 409);
@@ -209,11 +204,7 @@ class StudentCerAttemptController extends Controller
     }
 
     /**
-     * Submit akhir.
-     *
-     * Sebelum deadline: simpan payload terakhir lalu finalisasi.
-     * Setelah deadline: abaikan payload dan finalisasi jawaban tersimpan.
-     * Jika sudah selesai: kembalikan hasil yang sama.
+     * Submit akhir pengerjaan.
      */
     public function submit(Request $request, CerQuiz $cerQuiz)
     {
@@ -222,9 +213,12 @@ class StudentCerAttemptController extends Controller
             403
         );
 
+        $logsData = $request->input('logs', []);
+
         $result = DB::transaction(function () use (
             $request,
-            $cerQuiz
+            $cerQuiz,
+            $logsData
         ) {
             $quiz = CerQuiz::query()
                 ->whereKey($cerQuiz->id)
@@ -266,6 +260,10 @@ class StudentCerAttemptController extends Controller
                 $validated['answers']
             );
 
+            if (! empty($logsData)) {
+                $this->persistLogs($attempt, $request->user()->id, $quiz->id, $logsData);
+            }
+
             $attempt->refresh();
 
             return $this->finalizer->finalizeLocked(
@@ -275,7 +273,6 @@ class StudentCerAttemptController extends Controller
             );
         }, 3);
 
-        // Broadcast Reverb saat pengerjaan berhasil disubmit
         \App\Events\QuizAttemptSubmitted::dispatch($result);
 
         return response()->json([
@@ -292,29 +289,25 @@ class StudentCerAttemptController extends Controller
     }
 
     /**
-     * Melihat hasil setelah aktivitas selesai.
+     * Melihat hasil review setelah aktivitas selesai.
      */
     public function review(Request $request, CerQuiz $cerQuiz)
     {
         $user = $request->user();
 
-        // 1. Validasi Role
         abort_unless(
             in_array($user->role, ['student', 'teacher']),
             403,
             'Anda tidak memiliki akses untuk melihat review pengerjaan ini.'
         );
 
-        // 2. Tentukan ID Mahasiswa yang akan dilihat kuisnya
         $studentId = $user->id;
 
         if ($user->role === 'teacher') {
-            // Jika dosen, wajib menyertakan query parameter student_id
             $request->validate([
                 'student_id' => ['required', 'integer', 'exists:users,id'],
             ]);
 
-            // Pastikan dosen memang pemilik kuis ini
             abort_unless(
                 $cerQuiz->teacher_id === $user->id,
                 403,
@@ -324,7 +317,6 @@ class StudentCerAttemptController extends Controller
             $studentId = (int) $request->query('student_id');
         }
 
-        // 3. Ambil pengerjaan (attempt) mahasiswa terkait
         $attempt = QuizAttempt::query()
             ->where('quiz_id', $cerQuiz->id)
             ->where('student_id', $studentId)
@@ -355,7 +347,6 @@ class StudentCerAttemptController extends Controller
             return [
                 'id' => $item->id,
                 'page_order' => $item->page_order,
-
                 'cards' => $item->optionCards->map(function ($card) {
                     return [
                         'id' => $card->id,
@@ -379,7 +370,6 @@ class StudentCerAttemptController extends Controller
             'quiz' => [
                 'id' => $quiz->id,
                 'title' => $quiz->title,
-                // Jika diakses oleh dosen, kunci jawaban selalu ditampilkan
                 'show_keys' => $user->role === 'teacher' ? true : (bool) $quiz->show_keys,
                 'material' => $quiz->material,
             ],
@@ -396,10 +386,36 @@ class StudentCerAttemptController extends Controller
         ]);
     }
 
-    private function findAttempt(
-        int $quizId,
-        int $studentId
-    ): ?QuizAttempt {
+    private function persistLogs(QuizAttempt $attempt, int $studentId, int $quizId, array $logsData): void
+    {
+        if (empty($logsData)) {
+            return;
+        }
+
+        \App\Models\StudentActivityLog::updateOrCreate(
+            [
+                'attempt_id' => $attempt->id,
+            ],
+            [
+                'student_id' => $studentId,
+                'quiz_id' => $quizId,
+                'place_claim' => (int) ($logsData['place_claim'] ?? 0),
+                'place_evidence' => (int) ($logsData['place_evidence'] ?? 0),
+                'place_reasoning' => (int) ($logsData['place_reasoning'] ?? 0),
+                'delete_claim' => (int) ($logsData['delete_claim'] ?? 0),
+                'delete_evidence' => (int) ($logsData['delete_evidence'] ?? 0),
+                'delete_reasoning' => (int) ($logsData['delete_reasoning'] ?? 0),
+                'replace_claim' => (int) ($logsData['replace_claim'] ?? 0),
+                'replace_evidence' => (int) ($logsData['replace_evidence'] ?? 0),
+                'replace_reasoning' => (int) ($logsData['replace_reasoning'] ?? 0),
+                'read_material_count' => (int) ($logsData['read_material_count'] ?? 0),
+                'read_material_time' => (int) ($logsData['read_material_time'] ?? 0),
+            ]
+        );
+    }
+
+    private function findAttempt(int $quizId, int $studentId): ?QuizAttempt
+    {
         return QuizAttempt::query()
             ->where('quiz_id', $quizId)
             ->where('student_id', $studentId)
@@ -425,67 +441,36 @@ class StudentCerAttemptController extends Controller
         }
 
         return $this->now()->greaterThanOrEqualTo(
-            Carbon::parse(
-                $attempt->deadline_at,
-                $this->timezone()
-            )
+            Carbon::parse($attempt->deadline_at, $this->timezone())
         );
     }
 
-    private function finalizeExpired(
-        QuizAttempt $attempt,
-        CerQuiz $quiz
-    ): QuizAttempt {
+    private function finalizeExpired(QuizAttempt $attempt, CerQuiz $quiz): QuizAttempt
+    {
         if ($attempt->status === 'completed') {
             return $attempt;
         }
 
-        $deadline = Carbon::parse(
-            $attempt->deadline_at,
-            $this->timezone()
-        );
+        $deadline = Carbon::parse($attempt->deadline_at, $this->timezone());
 
-        return $this->finalizer->finalizeLocked(
-            $attempt,
-            $quiz,
-            $deadline
-        );
+        return $this->finalizer->finalizeLocked($attempt, $quiz, $deadline);
     }
 
-    private function validateAnswers(
-        Request $request,
-        CerQuiz $quiz
-    ): array {
+    private function validateAnswers(Request $request, CerQuiz $quiz): array
+    {
         $validated = Validator::make(
             $request->all(),
             [
                 'answers' => ['required', 'array'],
-                'answers.*.item_id' => [
-                    'required',
-                    'integer',
-                    'distinct',
-                ],
-                'answers.*.claim_card_id' => [
-                    'nullable',
-                    'integer',
-                ],
-                'answers.*.evidence_card_id' => [
-                    'nullable',
-                    'integer',
-                ],
-                'answers.*.reasoning_card_id' => [
-                    'nullable',
-                    'integer',
-                ],
+                'answers.*.item_id' => ['required', 'integer', 'distinct'],
+                'answers.*.claim_card_id' => ['nullable', 'integer'],
+                'answers.*.evidence_card_id' => ['nullable', 'integer'],
+                'answers.*.reasoning_card_id' => ['nullable', 'integer'],
             ]
         )->validate();
 
         $answers = collect($validated['answers']);
-
-        $itemIds = $answers
-            ->pluck('item_id')
-            ->unique()
-            ->values();
+        $itemIds = $answers->pluck('item_id')->unique()->values();
 
         $validItemIds = $quiz->items()
             ->whereIn('id', $itemIds)
@@ -515,11 +500,7 @@ class StudentCerAttemptController extends Controller
             ->keyBy('id');
 
         foreach ($answers as $answer) {
-            foreach ([
-                'claim_card_id',
-                'evidence_card_id',
-                'reasoning_card_id',
-            ] as $field) {
+            foreach (['claim_card_id', 'evidence_card_id', 'reasoning_card_id'] as $field) {
                 $cardId = $answer[$field] ?? null;
 
                 if ($cardId === null) {
@@ -528,10 +509,7 @@ class StudentCerAttemptController extends Controller
 
                 $card = $cards->get($cardId);
 
-                if (
-                    ! $card ||
-                    (int) $card->item_id !== (int) $answer['item_id']
-                ) {
+                if (! $card || (int) $card->item_id !== (int) $answer['item_id']) {
                     throw ValidationException::withMessages([
                         'answers' => 'Kartu tidak sesuai dengan item CER.',
                     ]);
@@ -542,10 +520,8 @@ class StudentCerAttemptController extends Controller
         return ['answers' => $answers->all()];
     }
 
-    private function persistAnswers(
-        QuizAttempt $attempt,
-        array $answers
-    ): void {
+    private function persistAnswers(QuizAttempt $attempt, array $answers): void
+    {
         if ($answers === []) {
             return;
         }
@@ -574,10 +550,8 @@ class StudentCerAttemptController extends Controller
         );
     }
 
-    private function attemptPayload(
-        CerQuiz $quiz,
-        QuizAttempt $attempt
-    ): array {
+    private function attemptPayload(CerQuiz $quiz, QuizAttempt $attempt): array
+    {
         $quiz->load([
             'material:id,title,content',
             'teacher:id,name',
@@ -614,7 +588,6 @@ class StudentCerAttemptController extends Controller
                 return [
                     'id' => $item->id,
                     'page_order' => $item->page_order,
-                    // card_type tidak dikirim saat pengerjaan.
                     'cards' => $item->optionCards->map(fn ($card) => [
                         'id' => $card->id,
                         'content' => $card->content,

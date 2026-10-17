@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CerQuiz;
 use App\Models\Material;
 use App\Models\QuizAttempt;
+use App\Models\StudentActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -361,7 +362,7 @@ class CerQuizController extends Controller
                 'description' => $activity->description,
                 'duration_minutes' => $activity->duration_minutes,
                 'status' => $activity->status,
-                'show_keys' => $activity->show_keys ?? true, // Kembalikan properti show_keys
+                'show_keys' => $activity->show_keys ?? true,
 
                 'teacher' => [
                     'id' => $activity->teacher?->id,
@@ -381,6 +382,31 @@ class CerQuizController extends Controller
 
         return response()->json([
             'data' => $data,
+        ]);
+    }
+
+    /**
+     * Menampilkan log aktivitas mahasiswa untuk aktivitas CER tertentu.
+     */
+    public function getActivityLogs(Request $request, CerQuiz $cerQuiz)
+    {
+        abort_unless($request->user()->role === 'teacher', 403, 'Akses khusus guru/dosen.');
+        abort_unless($cerQuiz->teacher_id === $request->user()->id, 403, 'Anda tidak memiliki akses ke kuis ini.');
+
+        $logs = StudentActivityLog::query()
+            ->where('quiz_id', $cerQuiz->id)
+            ->with(['student' => function ($query) {
+                $query->select('id', 'name', 'username', 'class_name');
+            }])
+            ->latest('updated_at')
+            ->get();
+
+        return response()->json([
+            'quiz' => [
+                'id' => $cerQuiz->id,
+                'title' => $cerQuiz->title,
+            ],
+            'logs' => $logs,
         ]);
     }
 }

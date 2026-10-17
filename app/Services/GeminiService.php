@@ -84,6 +84,14 @@ Identifikasi terlebih dahulu konsep utama yang digunakan oleh evidence utama unt
 5. tetapi tidak memiliki hubungan CER yang tepat dengan claim.
 
 Jangan memilih distractor yang menggunakan konsep inti yang sama dengan evidence utama.
+
+---
+PETUNJUK FORMAT KELUARAN (TAMBAHAN SYSTEM):
+Kembalikan respon HANYA berupa objek JSON yang valid tanpa tambahan teks penjelasan, tanpa markdown fence (seperti ```json), dengan struktur persis berikut:
+{
+  "distractor_evidence": "Isi distractor evidence di sini",
+  "distractor_reasoning": "Isi distractor reasoning di sini"
+}
 PROMPT;
 
         $response = Http::timeout(60)
