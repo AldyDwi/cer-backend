@@ -20,7 +20,8 @@ return [
 
     'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
         '%s%s',
-        'localhost,localhost:3000,localhost:5173,127.0.0.1,127.0.0.1:8000,127.0.0.1:5173',
+        'localhost,localhost:8000,127.0.0.1,127.0.0.1:8000,::1',
+        ',cer-pied.vercel.app,definite-incredibly-tadpole.ngrok-free.app',
         Sanctum::currentApplicationUrlWithPort(),
         // Sanctum::currentRequestHost(),
     ))),
