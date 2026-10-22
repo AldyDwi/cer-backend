@@ -6,23 +6,15 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: reka_cer
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: secretpassword
+      MYSQL_USER: reka_user
+      MYSQL_PASSWORD: reka_password
     ports:
       - "3306:3306"
     volumes:
       - dbdata:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "--password=$$MYSQL_ROOT_PASSWORD"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
     networks:
-      - reka_cer_network
-
-  # Container Aplikasi Utama (PHP-FPM)
+      - reka_cer_network  # Container Aplikasi Utama (PHP-FPM)
   app:
     build:
       context: .
@@ -79,3 +71,7 @@ networks:
 volumes:
   dbdata:
     driver: local
+
+networks:
+  reka_cer_network:
+    driver: bridge
