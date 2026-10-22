@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Container Database MySQL
   db:
@@ -12,7 +10,7 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "127.0.0.1:3306:3306"
+      - "3306:3306"
     volumes:
       - dbdata:/var/lib/mysql
     healthcheck:
