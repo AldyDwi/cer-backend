@@ -64,10 +64,6 @@ services:
     networks:
       - reka_cer_network
 
-networks:
-  reka_cer_network:
-    driver: bridge
-
 volumes:
   dbdata:
     driver: local
