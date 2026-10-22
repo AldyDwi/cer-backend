@@ -36,6 +36,8 @@ jobs:
 
             cd /var/www/backend-reka-cer
 
+            git config --global --add safe.directory /var/www/backend-reka-cer
+
             echo "Pulling latest code..."
             git pull --ff-only origin main
 
