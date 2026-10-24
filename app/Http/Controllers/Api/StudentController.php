@@ -8,6 +8,9 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Storage;
+use App\Imports\UserImport;
 
 class StudentController extends Controller
 {
@@ -303,5 +306,62 @@ class StudentController extends Controller
         return response()->json([
             'message' => 'Student berhasil dihapus.',
         ]);
+    }
+
+    /**
+     * Mengimpor data user dari file Excel.
+     */
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,xls,csv|max:2048',
+        ]);
+
+        // Simpan file sementara di storage local
+        $path = $request->file('file')->store('temp_imports');
+
+        try {
+            $import = new UserImport();
+            Excel::import($import, storage_path('app/private/' . $path));
+
+            if ($import->failures()->isNotEmpty()) {
+                $errorMessages = [];
+                foreach ($import->failures() as $failure) {
+                    $row = $failure->row();
+                    foreach ($failure->errors() as $error) {
+                        $errorMessages[] = "Baris {$row}: {$error}";
+                    }
+                }
+
+                return response()->json([
+                    'message' => 'Beberapa data gagal diimport karena sudah ada di database atau tidak valid.',
+                    'errors'  => $errorMessages,
+                ], 422);
+            }
+
+            return response()->json([
+                'message' => 'Data pengguna berhasil diimport!',
+            ], 200);
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            $failures = $e->failures();
+            $errors = [];
+            foreach ($failures as $failure) {
+                $errors[] = "Baris ke-{$failure->row()}: {$failure->errors()[0]}";
+            }
+
+            return response()->json([
+                'message' => 'Beberapa baris gagal diimport.',
+                'errors'  => $errors,
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Gagal mengimport data: ' . $e->getMessage(),
+            ], 500);
+        } finally {
+            // Hapus file temporary setelah proses impor selesai (sukses/gagal)
+            if (Storage::exists($path)) {
+                Storage::delete($path);
+            }
+        }
     }
 }
