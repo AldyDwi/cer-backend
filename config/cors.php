@@ -27,7 +27,7 @@ return [
         'http://127.0.0.1:5173',
         'https://rekacer.my.id',
         'https://cer-pied.vercel.app',
-	'https://www.rekacer.my.id',
+	    'https://www.rekacer.my.id',
     ],
 
     'allowed_origins_patterns' => [],
