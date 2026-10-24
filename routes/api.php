@@ -79,13 +79,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource(
         'students',
         StudentController::class
-    )->only([
-        'index',
-        'store',
-        'show',
-        'update',
-        'destroy',
-    ]);;
+    );
 
     /*
     |--------------------------------------------------------------------------
