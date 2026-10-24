@@ -76,6 +76,11 @@ Route::middleware('auth:sanctum')->group(function () {
         StudentController::class
     );
 
+    Route::post(
+        '/students/import', 
+        [StudentController::class, 'import']
+    );
+
 
     /*
     |--------------------------------------------------------------------------
