@@ -41,6 +41,9 @@ jobs:
             echo "Pulling latest code..."
             git pull --ff-only origin main
 
+            echo "Recreating/updating Docker containers with new configs..."
+            docker compose up -d
+
             echo "Installing Composer dependencies..."
             docker compose exec -T app \
               composer install --no-interaction \
