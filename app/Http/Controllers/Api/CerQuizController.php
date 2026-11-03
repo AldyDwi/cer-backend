@@ -313,6 +313,7 @@ class CerQuizController extends Controller
                     ? gmdate('H:i:s', $attempt->duration_seconds) 
                     : null,
                 'status' => $attempt->status,
+                'started_at' => $attempt->started_at,
                 'completed_at' => $attempt->completed_at,
             ];
         })->values();
