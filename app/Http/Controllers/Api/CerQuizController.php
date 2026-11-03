@@ -10,6 +10,8 @@ use App\Models\QuizAttempt;
 use App\Models\StudentActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Exports\StudentActivityLogExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CerQuizController extends Controller
 {
@@ -408,5 +410,15 @@ class CerQuizController extends Controller
             ],
             'logs' => $logs,
         ]);
+    }
+
+    public function exportLogs(Request $request, CerQuiz $cerQuiz)
+    {
+        abort_unless($request->user()->role === 'teacher', 403, 'Akses khusus guru/dosen.');
+        abort_unless($cerQuiz->teacher_id === $request->user()->id, 403, 'Anda tidak memiliki akses ke kuis ini.');
+
+        $fileName = 'log_aktivitas_mahasiswa_quiz_' . $cerQuiz->id . '_' . date('Ymd_His') . '.xlsx';
+
+        return Excel::download(new StudentActivityLogExport((int) $cerQuiz->id), $fileName);
     }
 }

@@ -171,6 +171,11 @@ Route::middleware('auth:sanctum')->group(function () {
         [CerQuizController::class, 'getActivityLogs']
     );
 
+    Route::get(
+        '/cer-quizzes/{cerQuiz}/export-logs', 
+        [CerQuizController::class, 'exportLogs']
+    );
+
 
     /*
     |--------------------------------------------------------------------------

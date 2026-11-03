@@ -52,4 +52,9 @@ class QuizAttempt extends Model
     {
         return $this->hasMany(StudentAnswer::class, 'attempt_id');
     }
+
+    public function activityLog()
+    {
+        return $this->hasOne(StudentActivityLog::class, 'attempt_id', 'id');
+    }
 }
