@@ -41,24 +41,24 @@ jobs:
             echo "Pulling latest code..."
             git pull --ff-only origin main
 
-            echo "Recreating/updating Docker containers with new configs..."
-            docker compose up -d
+            echo "Recreating/updating Docker containers..."
+            docker compose -p backend-reka-cer up -d
 
             echo "Installing Composer dependencies..."
-            docker compose exec -T app \
+            docker compose -p backend-reka-cer exec -T app \
               composer install --no-interaction \
               --prefer-dist --optimize-autoloader --no-dev
 
             echo "Running database migrations..."
-            docker compose exec -T app php artisan migrate --force
+            docker compose -p backend-reka-cer exec -T app php artisan migrate --force
 
             echo "Rebuilding Laravel caches..."
-            docker compose exec -T app php artisan optimize:clear
-            docker compose exec -T app php artisan config:cache
-            docker compose exec -T app php artisan route:cache
-            docker compose exec -T app php artisan view:cache
+            docker compose -p backend-reka-cer exec -T app php artisan optimize:clear
+            docker compose -p backend-reka-cer exec -T app php artisan config:cache
+            docker compose -p backend-reka-cer exec -T app php artisan route:cache
+            docker compose -p backend-reka-cer exec -T app php artisan view:cache
 
             echo "Restarting application services..."
-            docker compose restart app reverb
+            docker compose -p backend-reka-cer restart app reverb
 
             echo "Deployment completed successfully."
